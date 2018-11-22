@@ -1,3 +1,4 @@
+import sqlite3 as sqlite
 import requests
 import json
 from bs4 import BeautifulSoup
@@ -27,37 +28,40 @@ def make_request_using_cache(url):
         fw.close()
         return CACHE_DICTION[url]
 
-#class Streamer():
-#    def __init__(self, name, url):
-#        self.name = name # name of streamer
-#        self.url = url # url to get to the streamer's specific page
-
-#        self.viewership = None # only there if they are in that list
-
-#    def __str__(self):
-#        return self.name
-
-def scrape_twitch_metrics_page(page_url, name_url_dict):
+def scrape_twitch_metrics_page(page_url, name_game_url):
     page_text = make_request_using_cache(page_url)
     page_soup = BeautifulSoup(page_text, 'html.parser')
 
     streamer_table = page_soup.find(class_ = 'list-group')
     name_url = streamer_table.find_all(class_ = 'd-flex mb-2 flex-wrap')
 
+    games = streamer_table.find_all(class_ = 'mr-3')
+    games_lst = []
+    for game in games:
+        game_name = game.text.strip()
+
+        if game_name != 'EN':
+            games_lst.append(game_name)
+
+    counter = 0
     streamer_lst = []
     for streamer in name_url:
         name = streamer.find(class_ = 'mr-2 mb-0').text
+        game = games_lst[counter]
         url = streamer.find('a')['href']
-        # pull the game that they play and add that to the dict!!!!!!!
 
         streamer_lst.append(name)
 
-        if name not in name_url_dict.keys():
-            name_url_dict[name] = url
+        if name not in name_game_url.keys():
+            name_game_url[name] = [game, url]
 
-    return streamer_lst, name_url_dict
+        counter += 1
+
+    return streamer_lst, name_game_url
 
 def scrape_streamer_page(page_url):
+    result = []
+
     page_text = make_request_using_cache(page_url)
     page_soup = BeautifulSoup(page_text, 'html.parser')
 
@@ -65,12 +69,16 @@ def scrape_streamer_page(page_url):
     info_lst = channel_details.find_all(class_ = 'col-6')
 
     date_joined = channel_details.find(class_ = 'with_zone').text
+    result.append(date_joined)
+
     follower_count = info_lst[9].text
+    result.append(follower_count)
 
     feat_snippet = channel_details.find_all('dl')[1]
     desc = feat_snippet.find('dd').text.strip()
+    result.append(desc)
 
-    print(desc)
+    return result
 
     # maybe add a function that takes each line of this and inserts into a table
 
@@ -86,31 +94,34 @@ def scrape_streamer_page(page_url):
 #--------------------------------------------------------------------
 
 base_url = 'https://www.twitchmetrics.net'
-name_url_dict = {}
+name_game_url = {}
 
 # scrape most watched page
 page_url = base_url + '/channels/viewership?lang=en'
-viewership_lst, name_url_dict = scrape_twitch_metrics_page(page_url, name_url_dict)
+viewership_lst, name_game_url = scrape_twitch_metrics_page(page_url, name_game_url)
 
 # scrape fastest growing page
 page_url = base_url + '/channels/growth?lang=en'
-growth_lst, name_url_dict = scrape_twitch_metrics_page(page_url, name_url_dict)
+growth_lst, name_game_url = scrape_twitch_metrics_page(page_url, name_game_url)
 
 # scrape highest peak viewership list
 page_url = base_url + '/channels/peak?lang=en'
-peak_lst, name_url_dict = scrape_twitch_metrics_page(page_url, name_url_dict)
+peak_lst, name_game_url = scrape_twitch_metrics_page(page_url, name_game_url)
 
 # scrape most popular list
 page_url = base_url + '/channels/popularity?lang=en'
-popularity_lst, name_url_dict = scrape_twitch_metrics_page(page_url, name_url_dict)
+popularity_lst, name_game_url = scrape_twitch_metrics_page(page_url, name_game_url)
 
 # scrape most followed list
 page_url = base_url + '/channels/follower?lang=en'
-follower_lst, name_url_dict = scrape_twitch_metrics_page(page_url, name_url_dict)
+follower_lst, name_game_url = scrape_twitch_metrics_page(page_url, name_game_url)
 
 #--------------------------------------------------------------------
 
-page_url = base_url + name_url_dict['Ninja']
-scrape_streamer_page(page_url)
+#page_url = base_url + name_game_url['Ninja'][1]
 
-print(name_url_dict)
+print(name_game_url)
+
+#streamer_details = {}
+#streamer_details['Ninja'] = scrape_streamer_page(page_url)
+#print(streamer_details)
