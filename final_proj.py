@@ -2,7 +2,9 @@ import sqlite3 as sqlite
 import requests
 import json
 from bs4 import BeautifulSoup
+import sys
 
+#--------------------------------CACHING------------------------------------
 CACHE_FNAME = 'cache_final.json'
 try:
     cache_file = open(CACHE_FNAME, 'r')
@@ -28,6 +30,7 @@ def make_request_using_cache(url):
         fw.close()
         return CACHE_DICTION[url]
 
+#-----------------------------STREAMER CLASS--------------------------------
 class Streamer():
     def __init__(self, name, game, url):
         self.username = name
@@ -50,6 +53,7 @@ class Streamer():
             + ", date joined: " + self.date_joined + ", description: " + self.description
         return streamer_str
 
+#--------------------FUNCTION TO SCRAPE THE RANKINGS------------------------
 def scrape_twitch_metrics_page(page_url, total_streamers_lst):
     page_text = make_request_using_cache(page_url)
     page_soup = BeautifulSoup(page_text, 'html.parser')
@@ -96,6 +100,7 @@ def scrape_twitch_metrics_page(page_url, total_streamers_lst):
 
     return ranking_lst, total_streamers_lst
 
+#--------------------FUNCTION TO SCRAPE THE STREAMER PAGES------------------
 def scrape_streamer_page(page_url, streamer):
     result = []
 
@@ -153,48 +158,224 @@ def scrape_streamer_page(page_url, streamer):
 #            streamer_lst[count].viewership = streamer.text
 #            count += 1
 
-#--------------------------------------------------------------------
+#----------------------PERFORM ALL OF THE SCRAPING------------------------
 
 # scrape each ranking list
 # first item returned is just a list of usernames for each ranking
 # second item is a growing list that contains the union of all of these rankings
+def reset_db():
+    print('Scraping the rankings from twitchmetrics.net...')
+    base_url = 'https://www.twitchmetrics.net'
+    total_streamers_lst = []
 
-base_url = 'https://www.twitchmetrics.net'
-total_streamers_lst = []
+    # scrape most watched page
+    page_url = base_url + '/channels/viewership?lang=en'
+    viewership_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
-# scrape most watched page
-page_url = base_url + '/channels/viewership?lang=en'
-viewership_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
+    # scrape fastest growing page
+    page_url = base_url + '/channels/growth?lang=en'
+    growth_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
-# scrape fastest growing page
-page_url = base_url + '/channels/growth?lang=en'
-growth_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
+    # scrape highest peak viewership list
+    page_url = base_url + '/channels/peak?lang=en'
+    peak_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
-# scrape highest peak viewership list
-page_url = base_url + '/channels/peak?lang=en'
-peak_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
+    # scrape most popular list
+    page_url = base_url + '/channels/popularity?lang=en'
+    popularity_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
-# scrape most popular list
-page_url = base_url + '/channels/popularity?lang=en'
-popularity_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
+    # scrape most followed list
+    page_url = base_url + '/channels/follower?lang=en'
+    follower_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
-# scrape most followed list
-page_url = base_url + '/channels/follower?lang=en'
-follower_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
+    print('Obtaining information on each streamer...')
+    for streamer in total_streamers_lst:
+        page_url = base_url + streamer.url
+        scrape_streamer_page(page_url, streamer)
 
-#--------------------------------------------------------------------
+    total_games_lst = []
+    for streamer in total_streamers_lst:
+        if streamer.game not in total_games_lst and streamer.game != '':
+            total_games_lst.append(streamer.game)
 
-count = 0
-for streamer in total_streamers_lst:
-    print(count)
-    page_url = base_url + streamer.url
-    print(streamer.username)
+#---------------------------MAKING THE TABLES-----------------------------------
 
-    scrape_streamer_page(page_url, streamer)
+# make the games and categories tables first, these don't point to anything
+# then make the streamers table, it will point to the games table
+# finally make the rankings table, this will point to the streamers and categories tables
 
-    print(streamer)
-    print('\n')
-    count += 1
+    print('Recreating the database...')
+    conn = sqlite.connect('twitch.db')
+    cur = conn.cursor()
 
-#page_url = base_url + total_streamers_lst[61].url
-#scrape_streamer_page(page_url, total_streamers_lst[61])
+    # Drop the tables if they already exist so they can be made again
+    statement = '''
+        DROP TABLE IF EXISTS 'Games';
+    '''
+    cur.execute(statement)
+
+    statement = '''
+        DROP TABLE IF EXISTS 'Categories';
+    '''
+    cur.execute(statement)
+
+    statement = '''
+        DROP TABLE IF EXISTS 'Streamers';
+    '''
+    cur.execute(statement)
+
+    statement = '''
+        DROP TABLE IF EXISTS 'Rankings';
+    '''
+    cur.execute(statement)
+
+    conn.commit()
+
+    # Create the Games table
+    statement = '''
+        CREATE TABLE 'Games' (
+            'Id' INTEGER PRIMARY KEY AUTOINCREMENT,
+            'Name' TEXT NOT NULL
+        );
+    '''
+    cur.execute(statement)
+
+    # Create the Categories table
+    statement = '''
+        CREATE TABLE 'Categories' (
+            'Id' INTEGER PRIMARY KEY AUTOINCREMENT,
+            'Name' TEXT NOT NULL
+        );
+    '''
+    cur.execute(statement)
+
+    # Create the Streamers table
+    statement = '''
+        CREATE TABLE 'Streamers' (
+            'Id' INTEGER PRIMARY KEY AUTOINCREMENT,
+            'Username' TEXT NOT NULL,
+            'GameId' INTEGER NULL,
+            'FollowerCount' INTEGER NOT NULL,
+            'FollowerChange' INTEGER NOT NULL,
+            'AvgViewers' INTEGER NOT NULL,
+            'PeakViewers' INTEGER NOT NULL,
+            'HoursLive' INTEGER NOT NULL,
+            'DateJoined' TEXT NOT NULL,
+            'Description' TEXT NULL
+        );
+    '''
+    cur.execute(statement)
+
+    # Create the Rankings table
+    statement = '''
+        CREATE TABLE 'Rankings' (
+            'CategoryId' INTEGER NOT NULL,
+            'StreamerId' INTEGER NOT NULL,
+            'StreamerRanking' INTEGER NOT NULL
+        );
+    '''
+    cur.execute(statement)
+    conn.commit()
+
+    # Fill the Games table
+    for game in total_games_lst:
+        insertion = (None, game)
+        statement = 'INSERT INTO Games VALUES (?, ?)'
+        cur.execute(statement, insertion)
+
+    conn.commit()
+
+    # Fill the Categories table
+    categories_lst = ['Most Watched', 'Fastest Growing', 'Highest Peak Viewership', \
+                    'Most Popular', 'Most Followed']
+    for category in categories_lst:
+        insertion = (None, category)
+        statement = 'INSERT INTO Categories VALUES (?, ?)'
+        cur.execute(statement, insertion)
+
+    conn.commit()
+
+    # Fill the Streamers table
+    for streamer in total_streamers_lst:
+        try:
+            game_id = cur.execute('SELECT Id FROM "Games" WHERE Name = "' + streamer.game + '"').fetchone()[0]
+        except:
+            game_id = None
+
+        insertion = (None, streamer.username, game_id, streamer.follower_count, \
+                    streamer.follower_change, streamer.avg_viewers, streamer.peak_viewers, \
+                    streamer.hours_live, streamer.date_joined, streamer.description)
+        statement = 'INSERT INTO Streamers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        cur.execute(statement, insertion)
+
+    conn.commit()
+
+    # Fill the Rankings table
+    index = 1
+    for streamer in viewership_lst:
+        category_id = 1
+        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
+
+        insertion = (category_id, streamer_id, index)
+        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
+        cur.execute(statement, insertion)
+
+        index += 1
+
+    index = 1
+    for streamer in growth_lst:
+        category_id = 2
+        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
+
+        insertion = (category_id, streamer_id, index)
+        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
+        cur.execute(statement, insertion)
+
+        index += 1
+
+    index = 1
+    for streamer in peak_lst:
+        category_id = 3
+        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
+
+        insertion = (category_id, streamer_id, index)
+        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
+        cur.execute(statement, insertion)
+
+        index += 1
+
+    index = 1
+    for streamer in popularity_lst:
+        category_id = 4
+        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
+
+        insertion = (category_id, streamer_id, index)
+        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
+        cur.execute(statement, insertion)
+
+        index += 1
+
+    index = 1
+    for streamer in follower_lst:
+        category_id = 5
+        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
+
+        insertion = (category_id, streamer_id, index)
+        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
+        cur.execute(statement, insertion)
+
+        index += 1
+
+    conn.commit()
+    conn.close()
+
+#---------------------------MAIN CODE--------------------------------
+command = input("Enter a command (or enter 'help' for options): ")
+
+while command.lower() != 'exit':
+    if command.lower() == 'reset':
+        reset_db()
+
+    command = input("Enter a command (or enter 'help' for options): ")
+
+print('Bye!')
