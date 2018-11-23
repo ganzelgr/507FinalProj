@@ -38,6 +38,7 @@ class Streamer():
         self.url = url
 
         self.follower_count = 0
+        self.viewership = 0
         self.follower_change = 0
         self.avg_viewers = 0
         self.peak_viewers = 0
@@ -45,12 +46,20 @@ class Streamer():
         self.date_joined = ''
         self.description = ''
 
+# need to modify this class function to actually look good
     def __str__(self):
-        streamer_str = "username: " + self.username + ", game: " + self.game\
-            + ", follower count: " + str(self.follower_count) + ", follower change: "\
-            + str(self.follower_change) + ", average viewers: " + str(self.avg_viewers) +\
-            ", peak viewers: " + str(self.peak_viewers) + ", hours live: " + str(self.hours_live)\
-            + ", date joined: " + self.date_joined + ", description: " + self.description
+        if self.viewership != 0:
+            streamer_str = "username: " + self.username + ", game: " + self.game\
+                + ", follower count: " + str(self.follower_count) + ", follower change: "\
+                + str(self.follower_change) + ", average viewers: " + str(self.avg_viewers) +\
+                ", peak viewers: " + str(self.peak_viewers) + ", hours live: " + str(self.hours_live)\
+                + ", date joined: " + self.date_joined + ", description: " + self.description + ', viewership: ' + self.viewership
+        else:
+            streamer_str = "username: " + self.username + ", game: " + self.game\
+                + ", follower count: " + str(self.follower_count) + ", follower change: "\
+                + str(self.follower_change) + ", average viewers: " + str(self.avg_viewers) +\
+                ", peak viewers: " + str(self.peak_viewers) + ", hours live: " + str(self.hours_live)\
+                + ", date joined: " + self.date_joined + ", description: " + self.description
         return streamer_str
 
 #--------------------FUNCTION TO SCRAPE THE RANKINGS------------------------
@@ -94,6 +103,58 @@ def scrape_twitch_metrics_page(page_url, total_streamers_lst):
 
         if in_list == False:
             instance = Streamer(name, game, url)
+            total_streamers_lst.append(instance)
+
+        counter += 1
+
+    return ranking_lst, total_streamers_lst
+
+def scrape_viewership_page(page_url, total_streamers_lst):
+    page_text = make_request_using_cache(page_url)
+    page_soup = BeautifulSoup(page_text, 'html.parser')
+
+    # narrow results down to the portion of the page containing usernames and urls
+    streamer_table = page_soup.find(class_ = 'list-group')
+    name_url = streamer_table.find_all(class_ = 'd-flex mb-2 flex-wrap')
+
+    # narrow results down to the portion of the page containing the game names
+    games = streamer_table.find_all(class_ = 'mr-3')
+    games_lst = []
+    for game in games:
+        game_name = game.text.strip()
+
+        if game_name != 'EN':
+            games_lst.append(game_name)
+
+    viewership = streamer_table.find_all(style = 'font-size: 1.1em')
+    viewership_lst = []
+    for item in viewership:
+        if item != '':
+            viewership_lst.append(item.text.strip().replace(',', ''))
+
+    counter = 0
+    ranking_lst = []
+    for streamer in name_url:
+        # get the name, game, and url for each streamer
+        name = streamer.find(class_ = 'mr-2 mb-0').text
+        game = games_lst[counter]
+        url = streamer.find('a')['href']
+        viewership = viewership_lst[counter]
+
+        # append the name to the list of rankings
+        ranking_lst.append(name)
+
+        # search through the list of all of the streamer instances
+        # if the current streamer is already in there, do nothing
+        # if the current streamer hasn't been added yet, make an instance and append to the list
+        in_list = False
+        for item in total_streamers_lst:
+            if item.username == name:
+                in_list = True
+
+        if in_list == False:
+            instance = Streamer(name, game, url)
+            instance.viewership = viewership
             total_streamers_lst.append(instance)
 
         counter += 1
@@ -146,18 +207,6 @@ def scrape_streamer_page(page_url, streamer):
     hours_live = int(stats[3].find('samp').text.strip().replace(',', ''))
     streamer.hours_live = hours_live
 
-
-    # maybe add a function that takes each line of this and inserts into a table
-
-# total viewership is the only thing you can't get from the streamer's page
-#if page_url == 'https://www.twitchmetrics.net/channels/viewership?lang=en':
-#    viewership_info = streamer_table.find_all(style = 'font-size: 1.1em')
-#
-#        count = 0
-#        for streamer in viewership_info:
-#            streamer_lst[count].viewership = streamer.text
-#            count += 1
-
 #----------------------PERFORM ALL OF THE SCRAPING------------------------
 
 # scrape each ranking list
@@ -172,7 +221,7 @@ def reset_db():
     # scrape most watched page
     print('Scraping the most watched list...')
     page_url = base_url + '/channels/viewership?lang=en'
-    viewership_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
+    viewership_lst, total_streamers_lst = scrape_viewership_page(page_url, total_streamers_lst)
 
     # scrape fastest growing page
     print('Scraping the fastest growing list...')
@@ -267,6 +316,7 @@ def reset_db():
             'Id' INTEGER PRIMARY KEY AUTOINCREMENT,
             'Username' TEXT NOT NULL,
             'GameId' INTEGER NULL,
+            'ViewerHours' INTEGER NULL,
             'FollowerCount' INTEGER NOT NULL,
             'FollowerChange' INTEGER NOT NULL,
             'AvgViewers' INTEGER NOT NULL,
@@ -314,10 +364,12 @@ def reset_db():
         except:
             game_id = None
 
-        insertion = (None, streamer.username, game_id, streamer.follower_count, \
+        if streamer.viewership == 0:
+            streamer.viewership = None
+        insertion = (None, streamer.username, game_id, streamer.viewership, streamer.follower_count, \
                     streamer.follower_change, streamer.avg_viewers, streamer.peak_viewers, \
                     streamer.hours_live, streamer.date_joined, streamer.description)
-        statement = 'INSERT INTO Streamers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        statement = 'INSERT INTO Streamers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         cur.execute(statement, insertion)
 
     conn.commit()
