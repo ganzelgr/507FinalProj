@@ -164,35 +164,47 @@ def scrape_streamer_page(page_url, streamer):
 # first item returned is just a list of usernames for each ranking
 # second item is a growing list that contains the union of all of these rankings
 def reset_db():
-    print('Scraping the rankings from twitchmetrics.net...')
+    print('---Scraping the rankings from twitchmetrics.net: Step 1 of 3---')
+
     base_url = 'https://www.twitchmetrics.net'
     total_streamers_lst = []
 
     # scrape most watched page
+    print('Scraping the most watched list...')
     page_url = base_url + '/channels/viewership?lang=en'
     viewership_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
     # scrape fastest growing page
+    print('Scraping the fastest growing list...')
     page_url = base_url + '/channels/growth?lang=en'
     growth_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
     # scrape highest peak viewership list
+    print('Scraping the peak viewership list...')
     page_url = base_url + '/channels/peak?lang=en'
     peak_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
     # scrape most popular list
+    print('Scraping the most popular list...')
     page_url = base_url + '/channels/popularity?lang=en'
     popularity_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
     # scrape most followed list
+    print('Scraping the most followed list...')
     page_url = base_url + '/channels/follower?lang=en'
     follower_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
-    print('Obtaining information on each streamer...')
+    # scrape the streamer pages
+    print('\n---Obtaining information on each streamer: Step 2 of 3---')
+    streamer_cnt = len(total_streamers_lst)
+    count = 1
     for streamer in total_streamers_lst:
+        print('Scraping page ' + str(count) + ' of ' + str(streamer_cnt))
         page_url = base_url + streamer.url
         scrape_streamer_page(page_url, streamer)
+        count += 1
 
+    # get a list of all of the games that are played to make the table
     total_games_lst = []
     for streamer in total_streamers_lst:
         if streamer.game not in total_games_lst and streamer.game != '':
@@ -204,7 +216,7 @@ def reset_db():
 # then make the streamers table, it will point to the games table
 # finally make the rankings table, this will point to the streamers and categories tables
 
-    print('Recreating the database...')
+    print('\n---Recreating the database: Step 3 of 3---')
     conn = sqlite.connect('twitch.db')
     cur = conn.cursor()
 
@@ -311,70 +323,96 @@ def reset_db():
     conn.commit()
 
     # Fill the Rankings table
-    index = 1
-    for streamer in viewership_lst:
-        category_id = 1
-        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
+    rankings_lst = [viewership_lst, growth_lst, peak_lst, popularity_lst, follower_lst]
 
-        insertion = (category_id, streamer_id, index)
-        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
-        cur.execute(statement, insertion)
+    for i in range(5):
+        index = 1
+        for streamer in rankings_lst[i]:
+            category_id = i + 1
+            streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
 
-        index += 1
+            insertion = (category_id, streamer_id, index)
+            statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
+            cur.execute(statement, insertion)
 
-    index = 1
-    for streamer in growth_lst:
-        category_id = 2
-        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
-
-        insertion = (category_id, streamer_id, index)
-        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
-        cur.execute(statement, insertion)
-
-        index += 1
-
-    index = 1
-    for streamer in peak_lst:
-        category_id = 3
-        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
-
-        insertion = (category_id, streamer_id, index)
-        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
-        cur.execute(statement, insertion)
-
-        index += 1
-
-    index = 1
-    for streamer in popularity_lst:
-        category_id = 4
-        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
-
-        insertion = (category_id, streamer_id, index)
-        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
-        cur.execute(statement, insertion)
-
-        index += 1
-
-    index = 1
-    for streamer in follower_lst:
-        category_id = 5
-        streamer_id = cur.execute('SELECT Id FROM "Streamers" WHERE Username = "' + streamer + '"').fetchone()[0]
-
-        insertion = (category_id, streamer_id, index)
-        statement = 'INSERT INTO Rankings VALUES (?, ?, ?)'
-        cur.execute(statement, insertion)
-
-        index += 1
+            index += 1
 
     conn.commit()
     conn.close()
 
+#--------------------FUNCTION FOR DISPLAYING RANKINGS------------------
+def display_rankings(category):
+    conn = sqlite.connect('twitch.db')
+    cur = conn.cursor()
+
+    statement = 'SELECT Rankings.StreamerRanking, Streamers.Username, Games.Name, '
+
+    #if category == 'viewership':
+    #    statement += 'Streamers.AvgViewers '
+    #    category_id = 1
+    #    column_name = "Weekly Viewership"
+    if category == 'growth':
+        statement += 'Streamers.FollowerChange '
+        category_id = 2
+        column_name = "Weekly Follower Change"
+    elif category == 'peak':
+        statement += 'Streamers.PeakViewers '
+        category_id = 3
+        column_name = "Weekly Peak Viewers"
+    elif category == 'popularity':
+        category_id = 4
+        statement += 'Streamers.AvgViewers '
+        column_name = "Weekly Average Viewers"
+    elif category == 'follower':
+        category_id = 5
+        statement += 'Streamers.FollowerCount '
+        column_name = "Total Follower Count"
+
+    statement += 'FROM Streamers JOIN Rankings ON Streamers.Id = Rankings.StreamerId '
+    statement += 'JOIN Games ON Streamers.GameId = Games.Id '
+    statement += 'WHERE Rankings.CategoryId = ' + str(category_id)
+
+    cur.execute(statement)
+
+    print("\n{:<7} {:<20s} {:<20s} {:<10}".format('Ranking', 'Username', 'Game', column_name))
+    for row in cur:
+
+        final_lst = []
+        for word in row:
+            if isinstance(word, str) and len(word) > 12:
+                word = word[0:11] + '...'
+            final_lst.append(word)
+
+        print("{:<7} {:<20s} {:<20s} {:<10}".format(final_lst[0], final_lst[1], final_lst[2], final_lst[3]))
+
+    conn.close()
+
+
 #---------------------------MAIN CODE--------------------------------
+# commands:
+#       reset
+#       rankings [category] - shows the ranking in table
+#           streamer - gives info on a streamer on that list
+#           plot - plots that list
+#       plot [category/all] [variable] - plots given people by a given variable
+#       game - returns list of streamers that play that game
+
+
+# category = viewership, growth, peak, popularity, follower
+# variable =
+
 command = input("Enter a command (or enter 'help' for options): ")
 
 while command.lower() != 'exit':
-    if command.lower() == 'reset':
+    command_str = command.lower().split()
+
+    if command_str[0] == 'reset':
         reset_db()
+
+    if command_str[0] == 'rankings':
+        category = command_str[1]
+
+        display_rankings(category)
 
     command = input("Enter a command (or enter 'help' for options): ")
 
