@@ -3,6 +3,8 @@ import requests
 import json
 from bs4 import BeautifulSoup
 import sys
+import plotly.plotly as py
+import plotly.graph_objs as go
 
 #--------------------------------CACHING------------------------------------
 CACHE_FNAME = 'cache_final.json'
@@ -17,11 +19,9 @@ except:
 
 def make_request_using_cache(url):
     if url in CACHE_DICTION:
-        #print("Getting cached data...")
         return CACHE_DICTION[url]
 
     else:
-        #print("Making a request for new data...")
         resp = requests.get(url)
         CACHE_DICTION[url] = resp.text
         dumped_json_cache = json.dumps(CACHE_DICTION)
@@ -46,23 +46,7 @@ class Streamer():
         self.date_joined = ''
         self.description = ''
 
-# need to modify this class function to actually look good
-    def __str__(self):
-        if self.viewership != 0:
-            streamer_str = "username: " + self.username + ", game: " + self.game\
-                + ", follower count: " + str(self.follower_count) + ", follower change: "\
-                + str(self.follower_change) + ", average viewers: " + str(self.avg_viewers) +\
-                ", peak viewers: " + str(self.peak_viewers) + ", hours live: " + str(self.hours_live)\
-                + ", date joined: " + self.date_joined + ", description: " + self.description + ', viewership: ' + self.viewership
-        else:
-            streamer_str = "username: " + self.username + ", game: " + self.game\
-                + ", follower count: " + str(self.follower_count) + ", follower change: "\
-                + str(self.follower_change) + ", average viewers: " + str(self.avg_viewers) +\
-                ", peak viewers: " + str(self.peak_viewers) + ", hours live: " + str(self.hours_live)\
-                + ", date joined: " + self.date_joined + ", description: " + self.description
-        return streamer_str
-
-#--------------------FUNCTION TO SCRAPE THE RANKINGS------------------------
+#---------FUNCTION TO SCRAPE ALL RANKINGS EXCEPT VIEWERSHIP---------------
 def scrape_twitch_metrics_page(page_url, total_streamers_lst):
     page_text = make_request_using_cache(page_url)
     page_soup = BeautifulSoup(page_text, 'html.parser')
@@ -109,6 +93,10 @@ def scrape_twitch_metrics_page(page_url, total_streamers_lst):
 
     return ranking_lst, total_streamers_lst
 
+#---------FUNCTION TO SCRAPE SPECIFICALLY THE VIEWERSHIP RANKING---------------
+# this needed a seperate function because total viewership must be taken from
+# the ranking list, it isn't on the individual streamer pages
+
 def scrape_viewership_page(page_url, total_streamers_lst):
     page_text = make_request_using_cache(page_url)
     page_soup = BeautifulSoup(page_text, 'html.parser')
@@ -126,6 +114,7 @@ def scrape_viewership_page(page_url, total_streamers_lst):
         if game_name != 'EN':
             games_lst.append(game_name)
 
+    # get the list of weekly viewership in order as they appear on the list
     viewership = streamer_table.find_all(style = 'font-size: 1.1em')
     viewership_lst = []
     for item in viewership:
@@ -219,39 +208,30 @@ def reset_db():
     total_streamers_lst = []
 
     # scrape most watched page
-    print('Scraping the most watched list...')
     page_url = base_url + '/channels/viewership?lang=en'
     viewership_lst, total_streamers_lst = scrape_viewership_page(page_url, total_streamers_lst)
 
     # scrape fastest growing page
-    print('Scraping the fastest growing list...')
     page_url = base_url + '/channels/growth?lang=en'
     growth_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
     # scrape highest peak viewership list
-    print('Scraping the peak viewership list...')
     page_url = base_url + '/channels/peak?lang=en'
     peak_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
     # scrape most popular list
-    print('Scraping the most popular list...')
     page_url = base_url + '/channels/popularity?lang=en'
     popularity_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
     # scrape most followed list
-    print('Scraping the most followed list...')
     page_url = base_url + '/channels/follower?lang=en'
     follower_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
 
     # scrape the streamer pages
     print('\n---Obtaining information on each streamer: Step 2 of 3---')
-    streamer_cnt = len(total_streamers_lst)
-    count = 1
     for streamer in total_streamers_lst:
-        print('Scraping page ' + str(count) + ' of ' + str(streamer_cnt))
         page_url = base_url + streamer.url
         scrape_streamer_page(page_url, streamer)
-        count += 1
 
     # get a list of all of the games that are played to make the table
     total_games_lst = []
@@ -425,24 +405,87 @@ def display_rankings(category):
         column_name = "Total Follower Count"
 
     statement += 'FROM Streamers JOIN Rankings ON Streamers.Id = Rankings.StreamerId '
-    statement += 'JOIN Games ON Streamers.GameId = Games.Id '
+    statement += 'LEFT JOIN Games ON Streamers.GameId = Games.Id '
     statement += 'WHERE Rankings.CategoryId = ' + str(category_id)
 
     cur.execute(statement)
 
     print("\n{:<7} {:<20s} {:<20s} {:<10}".format('Ranking', 'Username', 'Game', column_name))
+
+    plot_dict = {} # {column_name: 0, streamer_name: value, ...}, will be returned if ppl want to plot
+    plot_dict['column'] = column_name
+
     for row in cur:
+        plot_dict[row[1]] = row[3]
 
         final_lst = []
         for word in row:
+
             if isinstance(word, str) and len(word) > 12:
                 word = word[0:11] + '...'
+            elif word == None:
+                word = 'Unknown'
             final_lst.append(word)
 
-        print("{:<7} {:<20s} {:<20s} {:<10}".format(final_lst[0], final_lst[1], final_lst[2], final_lst[3]))
-
+        print("{:<7} {:<20s} {:<20s} {:<10,}".format(final_lst[0], str(final_lst[1]), final_lst[2], final_lst[3]))
     conn.close()
 
+    return plot_dict
+
+#--------------------FUNCTION TO PLOT THE RANKINGS------------------
+def plot_rankings(category, plot_dict):
+
+    x_vals = []
+    y_vals = []
+    text_vals = []
+
+    for i in range(50):
+        x_vals.append(i + 1)
+
+    firstitem = True
+    for streamer, value in plot_dict.items():
+
+        if firstitem == True:
+            firstitem = False
+        else:
+            text_vals.append(streamer)
+            y_vals.append(value)
+
+    trace = go.Scatter(
+        x = x_vals,
+        y = y_vals,
+        text = text_vals,
+        mode = 'markers'
+    )
+
+    #data = [ dict(
+    #        type = 'scattergeo',
+    #        locationmode = 'USA-states',
+    #        lon = lon_vals,
+    #        lat = lat_vals,
+    #        text = text_vals,
+    #        mode = 'markers',
+    #        marker = dict(
+    #            size = 8,
+    #            symbol = 'star',
+    #            color = 'red'
+    #        ))
+
+    data = [trace]
+
+    layout = go.Layout(
+        title = 'Top 50 streamers in the ' + category + ' category',
+        xaxis = dict(
+            title = 'Streamer'
+        ),
+        yaxis = dict(
+            title = plot_dict['column']
+        )
+    )
+
+
+    fig = go.Figure( data=data, layout=layout )
+    py.plot(fig, filename=(category + '-plot') )
 
 #---------------------------MAIN CODE--------------------------------
 # commands:
@@ -462,13 +505,20 @@ command = input("Enter a command (or enter 'help' for options): ")
 while command.lower() != 'exit':
     command_str = command.lower().split()
 
+# GOTTA FIX ALL OF THIS
     if command_str[0] == 'reset':
         reset_db()
+        command = input("Enter a command (or enter 'help' for options): ")
 
     if command_str[0] == 'rankings':
-        category = command_str[1]
+        try:
+            category = command_str[1]
+            plot_dict = display_rankings(category)
 
-        display_rankings(category)
+        except:
+            print("Command not recognized. Please try again.")
+            command = input("Enter a command (or enter 'help' for options): ")
+            pass
 
         command = input("Enter a command (or enter 'help' for options): ")
 
@@ -511,5 +561,17 @@ while command.lower() != 'exit':
             conn.close()
 
             command = input("Enter a command (or enter 'help' for options): ")
+
+        elif command.split()[0].lower() == 'plot':
+            plot_rankings(category, plot_dict)
+            command = input("Enter a command (or enter 'help' for options): ")
+
+        else:
+            print("Command not recognized. Please try again.")
+            command = input("Enter a command (or enter 'help' for options): ")
+
+    else:
+        print("Command not recognized. Please try again.")
+        command = input("Enter a command (or enter 'help' for options): ")
 
 print('Bye!')
