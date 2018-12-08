@@ -412,7 +412,7 @@ def display_rankings(category):
 
     print("\n{:<7} {:<20s} {:<20s} {:<10}".format('Ranking', 'Username', 'Game', column_name))
 
-    plot_dict = {} # {column_name: 0, streamer_name: value, ...}, will be returned if ppl want to plot
+    plot_dict = {} # {'column': column_name, streamer_name: value, ...}, will be returned if ppl want to plot
     plot_dict['column'] = column_name
 
     for row in cur:
@@ -451,32 +451,18 @@ def plot_rankings(category, plot_dict):
             text_vals.append(streamer)
             y_vals.append(value)
 
-    trace = go.Scatter(
+    trace = go.Bar(
         x = x_vals,
         y = y_vals,
-        text = text_vals,
-        mode = 'markers'
+        text = text_vals
     )
-
-    #data = [ dict(
-    #        type = 'scattergeo',
-    #        locationmode = 'USA-states',
-    #        lon = lon_vals,
-    #        lat = lat_vals,
-    #        text = text_vals,
-    #        mode = 'markers',
-    #        marker = dict(
-    #            size = 8,
-    #            symbol = 'star',
-    #            color = 'red'
-    #        ))
 
     data = [trace]
 
     layout = go.Layout(
         title = 'Top 50 streamers in the ' + category + ' category',
         xaxis = dict(
-            title = 'Streamer'
+            title = 'Ranking'
         ),
         yaxis = dict(
             title = plot_dict['column']
