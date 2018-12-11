@@ -151,6 +151,8 @@ def scrape_viewership_page(page_url, total_streamers_lst):
     return ranking_lst, total_streamers_lst
 
 #--------------------FUNCTION TO SCRAPE THE STREAMER PAGES------------------
+# scrapes relevant information from the streamer page and creates streamer instances
+
 def scrape_streamer_page(page_url, streamer):
     result = []
 
@@ -412,7 +414,7 @@ def display_rankings(category):
 
     print("\n{:<7} {:<20s} {:<20s} {:<10}".format('Ranking', 'Username', 'Game', column_name))
 
-    plot_dict = {} # {'column': column_name, streamer_name: value, ...}, will be returned if ppl want to plot
+    plot_dict = {}
     plot_dict['column'] = column_name
 
     for row in cur:
@@ -421,8 +423,10 @@ def display_rankings(category):
         final_lst = []
         for word in row:
 
+            # cut off and add '...' to words that are too long
             if isinstance(word, str) and len(word) > 12:
                 word = word[0:11] + '...'
+            # make the game 'unknown' if one wasn't listed for the streamer
             elif word == None:
                 word = 'Unknown'
             final_lst.append(word)
@@ -433,6 +437,8 @@ def display_rankings(category):
     return plot_dict
 
 #----------------FUNCTION TO DISPLAY STREAMER INFO-----------------
+# displays all captured information on a streamer
+
 def display_streamer(streamer_name):
     conn = sqlite.connect('twitch.db')
     cur = conn.cursor()
@@ -466,6 +472,7 @@ def display_streamer(streamer_name):
     conn.close()
 
 #--------------------FUNCTION TO PLOT THE RANKINGS------------------
+# plotting the top 50 rankings in a bar plot
 def plot_rankings(category, plot_dict):
 
     x_vals = []
@@ -506,108 +513,140 @@ def plot_rankings(category, plot_dict):
     fig = go.Figure( data=data, layout=layout )
     py.plot(fig, filename=(category + '-plot') )
 
+#----------------FUNCTION TO PLOT THE GAME DISTRIBUTION-----------------
+# creates a pie chart to display the game distribution
+def plot_pie():
+
+    conn = sqlite.connect('twitch.db')
+    cur = conn.cursor()
+
+    statement = 'SELECT Games.Name '
+    statement += 'FROM Streamers JOIN Games ON Streamers.GameId = Games.Id '
+
+    result = cur.execute(statement)
+
+    games_dict = {}
+    for row in result:
+        if row[0] not in games_dict:
+            games_dict[row[0]] = 1
+        else:
+            games_dict[row[0]] += 1
+
+    labels = []
+    values = []
+
+    for game, value in games_dict.items():
+        labels.append(game)
+        values.append(value)
+
+    trace = go.Pie(labels=labels, values=values)
+    py.plot([trace], filename='game_dist')
+
+    conn.close()
+
 #---------------------------MAIN CODE--------------------------------
+if __name__ == '__main__':
 
-command = input("Enter a command (or enter 'help' for options): ")
+    command = input("Enter a command (or enter 'help' for options): ")
 
-while command.lower() != 'exit':
-    command_str = command.lower().split()
+    while command.lower() != 'exit':
+        command_str = command.lower().split()
 
-    if command_str[0] == 'help':
-        text = '''
-        Here are a list of the possible commands and their functions:
+        if command_str[0] == 'help':
+            text = '''
+            Here are a list of the possible commands and their functions:
 
-        reset - reconstructs the Twitch database.
-        rankings [category] - displays a table ranking the top 50 streamers in the user-provided category.
-                plot - plots the displayed table.
-        streamer [username] - displays information about a given streamer that is located on the displayed table.
-        game [game_name] - returns a list of streamers that play the user-provided game
-        exit - exits the program
+            reset - reconstructs the Twitch database.
+            rankings [category] - displays a table ranking the top 50 streamers in the user-provided category.
+                    plot - plots the displayed table.
+            streamer [username] - displays information about a given streamer that is located on the displayed table.
+            game [game_name] - returns a list of streamers that play the user-provided game
+            distribution - plots the distribution of games played by the top streamers.
+            exit - exits the program
 
-        -------------------
-        Potential category names and how they are ranked:
-        viewership - ranked by weekly viewer hours
-        growth - ranked by weekly follower change
-        peak - ranked by weekly peak viewers
-        popularity - ranked by weekly average viewers
-        follower - ranked by total follower count
+            -------------------
+            Potential category names and how they are ranked:
+            viewership - ranked by weekly viewer hours
+            growth - ranked by weekly follower change
+            peak - ranked by weekly peak viewers
+            popularity - ranked by weekly average viewers
+            follower - ranked by total follower count
 
-        '''
-        print(text)
-        command = input("Enter a command (or enter 'help' for options): ")
-
-    elif command_str[0] == 'reset':
-        reset_db()
-        command = input("Enter a command (or enter 'help' for options): ")
-
-    elif command_str[0] == 'rankings':
-        try:
-            category = command_str[1]
-            plot_dict = display_rankings(category)
+            '''
+            print(text)
             command = input("Enter a command (or enter 'help' for options): ")
 
-            if command.split()[0].lower() == 'plot':
-                plot_rankings(category, plot_dict)
+        elif command_str[0] == 'reset':
+            reset_db()
+            command = input("Enter a command (or enter 'help' for options): ")
+
+        elif command_str[0] == 'rankings':
+            try:
+                category = command_str[1]
+                plot_dict = display_rankings(category)
                 command = input("Enter a command (or enter 'help' for options): ")
 
-            elif command.split()[0].lower() == 'exit':
-                break
+                if command.split()[0].lower() == 'plot':
+                    plot_rankings(category, plot_dict)
+                    command = input("Enter a command (or enter 'help' for options): ")
 
-        except:
-            print("Command not recognized. Please try again.")
+                elif command.split()[0].lower() == 'exit':
+                    break
+
+            except:
+                print("Command not recognized. Please try again.")
+                command = input("Enter a command (or enter 'help' for options): ")
+                pass
+
+        elif command.split()[0].lower() == 'streamer':
+            streamer_name = command.split()[1]
+
+            if len(command.split()) > 2:
+                for word in command.split()[2:]:
+                    streamer_name += ' ' + word
+
+            display_streamer(streamer_name)
             command = input("Enter a command (or enter 'help' for options): ")
-            pass
 
-    elif command.split()[0].lower() == 'streamer':
-        streamer_name = command.split()[1]
+        elif command_str[0] == 'game':
+            game_name = command.split()[1]
 
-        if len(command.split()) > 2:
-            for word in command.split()[2:]:
-                streamer_name += ' ' + word
+            if len(command.split()) > 2:
+                for word in command.split()[2:]:
+                    game_name += ' ' + word
 
-        display_streamer(streamer_name)
-        command = input("Enter a command (or enter 'help' for options): ")
+            conn = sqlite.connect('twitch.db')
+            cur = conn.cursor()
 
-    elif command_str[0] == 'game':
-        game_name = command.split()[1]
+            statement = 'SELECT Streamers.Username '
+            statement += 'FROM Streamers JOIN Games ON Streamers.GameId = Games.Id '
+            statement += 'WHERE Games.Name = "' + game_name + '"'
 
-        if len(command.split()) > 2:
-            for word in command.split()[2:]:
-                game_name += ' ' + word
+            result = cur.execute(statement).fetchall()
 
-        conn = sqlite.connect('twitch.db')
-        cur = conn.cursor()
+            if result == []:
+                print("Game name not recongized. Try again.")
+                command = input("\nEnter a command (or enter 'help' for options): ")
+                pass
 
-        statement = 'SELECT Streamers.Username '
-        statement += 'FROM Streamers JOIN Games ON Streamers.GameId = Games.Id '
-        statement += 'WHERE Games.Name = "' + game_name + '"'
+            else:
+                print("\nHere are the streamers listed under the game category of " + game_name + ":")
 
-        result = cur.execute(statement).fetchall()
+                counter = 1
+                for row in result:
+                    print(str(counter) + ' ' + row[0])
+                    counter += 1
 
-        if result == []:
-            print("Game name not recongized. Try again.")
+                conn.close()
+
+                command = input("\nEnter a command (or enter 'help' for options): ")
+
+        elif command_str[0] == 'distribution':
+            plot_pie()
             command = input("\nEnter a command (or enter 'help' for options): ")
-            pass
 
         else:
-            print("\nHere are the streamers listed under the game category of " + game_name + ":")
+            print("Command not recognized. Please try again.")
+            command = input("Enter a command (or enter 'help' for options): ")
 
-            counter = 1
-            for row in result:
-                print(str(counter) + ' ' + row[0])
-                counter += 1
-
-            conn.close()
-
-            command = input("\nEnter a command (or enter 'help' for options): ")
-
-    else:
-        print("Command not recognized. Please try again.")
-        command = input("Enter a command (or enter 'help' for options): ")
-
-print('Bye!')
-
-# things to do:
-# the rest of the plotting.. i need to have it plot all of the streamers by a certain category variable
-# clean up this mess of the main code so that i don't need to ender exit 200 times to actually enter
-# general clean up of the rest of the code and comments :(
+    print('Bye!')
