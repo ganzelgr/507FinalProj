@@ -11,6 +11,23 @@ import unittest
 from final_proj import *
 
 # testing data access
+class TestScraping(unittest.TestCase):
+
+    def test_page_scraping(self):
+        base_url = 'https://www.twitchmetrics.net'
+        total_streamers_lst = []
+
+        page_url = base_url + '/channels/viewership?lang=en'
+        viewership_lst, total_streamers_lst = scrape_viewership_page(page_url, total_streamers_lst)
+        self.assertEqual(len(viewership_lst), 50)
+        self.assertEqual(len(total_streamers_lst), 50)
+
+
+        total_streamers_lst = []
+        page_url = base_url + '/channels/growth?lang=en'
+        growth_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
+        self.assertEqual(len(growth_lst), 50)
+        self.assertEqual(len(growth_lst), 50)
 
 # testing storage
 class TestDatabase(unittest.TestCase):
@@ -41,6 +58,24 @@ class TestDatabase(unittest.TestCase):
         result_list = results.fetchall()
 
         self.assertIn(('ASMR',), result_list)
+        self.assertEqual(len(result_list), 1)
+
+        conn.close()
+
+    def test_streamers_table(self):
+        conn = sqlite.connect('twitch.db')
+        cur = conn.cursor()
+
+        sql = '''
+            SELECT Username, HoursLive
+            FROM Streamers
+            WHERE Id = '1'
+        '''
+        results = cur.execute(sql)
+        result_list = results.fetchall()
+
+        self.assertEqual('Ninja', result_list[0][0])
+        self.assertEqual(68, result_list[0][1])
         self.assertEqual(len(result_list), 1)
 
         conn.close()
