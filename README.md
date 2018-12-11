@@ -1,10 +1,10 @@
 # 507FinalProj
 
-###### Data sources used:
+#### Data sources used:
 
 This project used data from the website www.twitchmetrics.net. The top 50 english-speaking streamers under the categories most watched, fastest growing, highest peak vierership, most popular, and most followed categories were scraped. From here, the program then crawled to the page belonging to each streamer to pull additional information, such as their monthly performance, date joined, total follower count, and featured snipped (if there was one).
 
-###### Here is a brief overview of the code's structure:
+#### Here is a brief overview of the code's structure:
 * Code for caching
 * Streamer class definition
 * Defintion of scrape_twitch_metrics_page function that scrapes top 50 for all categories except most watched 
@@ -18,14 +18,14 @@ This project used data from the website www.twitchmetrics.net. The top 50 englis
 * Definition of plot_pie function that uses a dictionary to get the count of how many streamers are playing each game, and displays that information in a pie chart on plotly*
 * The main interactive code
   
-###### User guide: 
+#### User guide: 
 
 In order to run the code, download the final_proj.py and requirements.txt files and place them in the same directory. Create a virtual environment and use requirements.txt to load the needed modules to run the python file. Upon running the python file, the user will be prompted for a command. Enter help to see a list of available commands and their functions.
   
-###### Here is how to access the four display options:
+#### Here is how to access the four display options:
 1. Enter 'rankings [category_name]' to view the rankings for a category displayed in a well formatted table. The possible category names are displayed upon entering 'help'
 2. Once you have the rankings for a category displayed, enter 'plot' to have the graph appear in plotly*
 3. Enter 'streamer [streamer_name]' to view additional information on any streamer
 4. Enter 'distribution' to see a pie chart showing a distribution of the games being played by the top ranked streamers.*
 
-** For help on how to get started using plotly, please visit https://plot.ly/python/getting-started/ for detailed instructions. **
+**For help on how to get started using plotly, please visit https://plot.ly/python/getting-started/ for detailed instructions.**
