@@ -1,18 +1,16 @@
 # 507FinalProj
 
 Data sources used:
-  This project used data from the website www.twitchmetrics.net.
-  The top 50 english-speaking streamers under the categories most watched, fastest growing, highest peak vierership, most popular, and most followed categories were scraped.
-  From here, the program then crawled to the page belonging to each streamer to pull additional information, such as their monthly performance, date joined, total follower count, and featured snipped (if there was one).
+
+This project used data from the website www.twitchmetrics.net. The top 50 english-speaking streamers under the categories most watched, fastest growing, highest peak vierership, most popular, and most followed categories were scraped. From here, the program then crawled to the page belonging to each streamer to pull additional information, such as their monthly performance, date joined, total follower count, and featured snipped (if there was one).
 
 Here is a brief overview of the code's structure:
-
--Code for caching
--Streamer class definition
--Defintion of scrape_twitch_metrics_page function that scrapes top 50 for all categories except most watched
-      -returns a list of usernames in ranked order, and a growing list that contains streamer instances from the union of all categories
--Definition of scrape_viewership_page function that scraped top 50 for most watched category
-      -returns a list of usernames in ranked order, and a growing list that contains streamer instances from the union of all categories
+*Code for caching
+*Streamer class definition
+*Defintion of scrape_twitch_metrics_page function that scrapes top 50 for all categories except most watched
+**returns a list of usernames in ranked order, and a growing list that contains streamer instances from the union of all categories
+*Definition of scrape_viewership_page function that scraped top 50 for most watched category
+**returns a list of usernames in ranked order, and a growing list that contains streamer instances from the union of all categories
 -Definition of reset_db() that does all of the scraping, and then recreates and populates the databases with the information
 -Definition of display_rankings function that pulls the rankings for a category from the database and prints it out in nicely formatted table in command prompt
 -Definition of display_streamer function that pulls information on a user-specified streamer from the database and prints it in a nicely formatted way in command prompt
