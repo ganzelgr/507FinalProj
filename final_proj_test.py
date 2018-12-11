@@ -15,107 +15,103 @@ from final_proj import *
 # testing storage
 class TestDatabase(unittest.TestCase):
 
-    def test_bar_table(self):
-        conn = sqlite3.connect(DBNAME)
+    def test_categories_table(self):
+        conn = sqlite.connect('twitch.db')
         cur = conn.cursor()
 
-        sql = 'SELECT Company FROM Bars'
+        sql = 'SELECT Name FROM Categories'
         results = cur.execute(sql)
         result_list = results.fetchall()
-        self.assertIn(('Sirene',), result_list)
-        self.assertEqual(len(result_list), 1795)
 
-        sql = '''
-            SELECT Company, SpecificBeanBarName, CocoaPercent,
-                   Rating
-            FROM Bars
-            WHERE Company="Woodblock"
-            ORDER BY Rating DESC
-        '''
-        results = cur.execute(sql)
-        result_list = results.fetchall()
-        #print(result_list)
-        self.assertEqual(len(result_list), 8)
-        self.assertEqual(result_list[0][3], 4.0)
+        self.assertIn(('Most Watched',), result_list)
+        self.assertEqual(len(result_list), 5)
 
         conn.close()
 
-    def test_country_table(self):
-        conn = sqlite3.connect(DBNAME)
+    def test_games_table(self):
+        conn = sqlite.connect('twitch.db')
         cur = conn.cursor()
 
         sql = '''
-            SELECT EnglishName
-            FROM Countries
-            WHERE Region="Oceania"
+            SELECT Name
+            FROM Games
+            WHERE Id = '13'
         '''
         results = cur.execute(sql)
         result_list = results.fetchall()
-        self.assertIn(('Australia',), result_list)
-        self.assertEqual(len(result_list), 27)
 
-        sql = '''
-            SELECT COUNT(*)
-            FROM Countries
-        '''
-        results = cur.execute(sql)
-        count = results.fetchone()[0]
-        self.assertTrue(count == 250 or count == 251)
+        self.assertIn(('ASMR',), result_list)
+        self.assertEqual(len(result_list), 1)
 
         conn.close()
 
     def test_joins(self):
-        conn = sqlite3.connect(DBNAME)
+        conn = sqlite.connect('twitch.db')
         cur = conn.cursor()
 
         sql = '''
-            SELECT Alpha2
-            FROM Bars
-                JOIN Countries
-                ON Bars.CompanyLocationId=Countries.Id
-            WHERE SpecificBeanBarName="Hacienda Victoria"
-                AND Company="Arete"
+            SELECT Username
+            FROM Streamers
+                JOIN Rankings
+                ON Rankings.StreamerId=Streamers.Id
+            WHERE CategoryId=1
         '''
         results = cur.execute(sql)
         result_list = results.fetchall()
-        self.assertIn(('US',), result_list)
+
+        self.assertIn(('Ninja',), result_list)
+        self.assertEqual(len(result_list), 50)
+
         conn.close()
 
-# testing processing
-class TestMapping(unittest.TestCase):
+# testing processing and displays
+class TestDisplay(unittest.TestCase):
 
-    # we can't test to see if the maps are correct, but we can test that
-    # the functions don't return an error!
-    def test_show_state_map(self):
+    def test_display_rankings(self):
         try:
-            plot_sites_for_state('mi')
-            plot_sites_for_state('az')
+            display_rankings('viewership')
+            display_rankings('popularity')
         except:
             self.fail()
 
-    def test_show_nearby_map(self):
-        site1 = NationalSite('National Monument',
-            'Sunset Crater Volcano', 'A volcano in a crater.')
-        site2 = NationalSite('National Park',
-            'Yellowstone', 'There is a big geyser there.')
+    def test_display_streamer(self):
         try:
-            plot_nearby_for_site(site1)
-            plot_nearby_for_site(site2)
+            display_streamer('Ninja')
+            display_streamer('imaqtpie')
         except:
             self.fail()
 
-class TestCompanySearch(unittest.TestCase):
+    def test_plot(self):
 
-    def test_company_search(self):
-        results = process_command('companies region=Europe ratings top=5')
-        self.assertEqual(results[1][0], 'Idilio (Felchlin)')
+        try:
+            category = 'viewership'
 
-        results = process_command('companies country=US bars_sold top=5')
-        self.assertTrue(results[0][0] == 'Fresco' and results[0][2] == 26)
+            conn = sqlite.connect('twitch.db')
+            cur = conn.cursor()
 
-        results = process_command('companies cocoa top=5')
-        self.assertEqual(results[0][0], 'Videri')
-        self.assertGreater(results[0][2], 0.79)
+            statement = 'SELECT Streamers.Username, Streamers.ViewerHours '
+            statement += 'FROM Streamers JOIN Rankings ON Streamers.Id = Rankings.StreamerId '
+            statement += 'WHERE Rankings.CategoryId = 1'
+
+            cur.execute(statement)
+
+            plot_dict = {}
+            plot_dict['column'] = "Weekly Viewer Hours"
+
+            for row in cur:
+                plot_dict[row[0]] = row[1]
+
+            plot_rankings(category, plot_dict)
+            conn.close()
+
+        except:
+                self.fail()
+
+    def test_pie(self):
+        try:
+            plot_pie()
+        except:
+            self.fail()
 
 if __name__ == '__main__':
     unittest.main()
