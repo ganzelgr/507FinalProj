@@ -432,6 +432,39 @@ def display_rankings(category):
 
     return plot_dict
 
+#----------------FUNCTION TO DISPLAY STREAMER INFO-----------------
+def display_streamer(streamer_name):
+    conn = sqlite.connect('twitch.db')
+    cur = conn.cursor()
+
+    statement = 'SELECT Games.Name, Streamers.FollowerCount, '
+    statement += 'Streamers.FollowerChange, Streamers.AvgViewers, '
+    statement += 'Streamers.PeakViewers, Streamers.HoursLive, '
+    statement += 'Streamers.DateJoined, Streamers.Description '
+    statement += 'FROM Streamers LEFT JOIN Games ON Streamers.GameId = Games.Id '
+    statement += 'WHERE Streamers.Username = "' + streamer_name + '"'
+
+    result = cur.execute(statement).fetchone()
+
+    if result is None:
+        print("Streamer name not recongized. Try again.")
+
+    else:
+        print('\n{} joined Twitch in {}, is under the game category of {}, and currently has {:,} followers.\n'.format(\
+        streamer_name, result[6], result[0], result[1]))
+
+        if result[7] != '':
+            print('Featured snippet: ')
+            print(result[7] + '\n')
+
+        print('Here is his/her weekly performance:')
+        print('Follower change: {:,}'.format(result[2]))
+        print('Average viewers: {:,}'.format(result[3]))
+        print('Peak viewers: {:,}'.format(result[4]))
+        print('Hours live: {:,}'.format(result[5]))
+
+    conn.close()
+
 #--------------------FUNCTION TO PLOT THE RANKINGS------------------
 def plot_rankings(category, plot_dict):
 
@@ -474,17 +507,6 @@ def plot_rankings(category, plot_dict):
     py.plot(fig, filename=(category + '-plot') )
 
 #---------------------------MAIN CODE--------------------------------
-# commands:
-#       reset
-#       rankings [category] - shows the ranking in table [DONE]
-#           streamer - gives info on a streamer on that list
-#           plot - plots that list
-#       plot [category/all] [variable] - plots given people by a given variable
-#       game - returns list of streamers that play that game
-
-
-# category = viewership, growth, peak, popularity, follower
-# variable =
 
 command = input("Enter a command (or enter 'help' for options): ")
 
@@ -492,80 +514,92 @@ while command.lower() != 'exit':
     command_str = command.lower().split()
 
     if command_str[0] == 'help':
-        # insert help text
-        pass
+        text = '''
+        Here are a list of the possible commands and their functions:
 
-    if command_str[0] == 'reset':
+        reset - reconstructs the Twitch database.
+        rankings [category] - displays a table ranking the top 50 streamers in the user-provided category.
+                plot - plots the displayed table.
+        streamer [username] - displays information about a given streamer that is located on the displayed table.
+        game [game_name] - returns a list of streamers that play the user-provided game
+        exit - exits the program
+
+        -------------------
+        Potential category names and how they are ranked:
+        viewership - ranked by weekly viewer hours
+        growth - ranked by weekly follower change
+        peak - ranked by weekly peak viewers
+        popularity - ranked by weekly average viewers
+        follower - ranked by total follower count
+
+        '''
+        print(text)
+        command = input("Enter a command (or enter 'help' for options): ")
+
+    elif command_str[0] == 'reset':
         reset_db()
         command = input("Enter a command (or enter 'help' for options): ")
 
-    if command_str[0] == 'rankings':
+    elif command_str[0] == 'rankings':
         try:
             category = command_str[1]
             plot_dict = display_rankings(category)
             command = input("Enter a command (or enter 'help' for options): ")
 
-            if command.split()[0].lower() == 'streamer':
-                streamer_name = command.split()[1]
-
-                if len(command.split()) > 2:
-                    for word in command.split()[2:]:
-                        streamer_name += ' ' + word
-
-                conn = sqlite.connect('twitch.db')
-                cur = conn.cursor()
-
-                statement = 'SELECT Games.Name, Streamers.FollowerCount, '
-                statement += 'Streamers.FollowerChange, Streamers.AvgViewers, '
-                statement += 'Streamers.PeakViewers, Streamers.HoursLive, '
-                statement += 'Streamers.DateJoined, Streamers.Description '
-                statement += 'FROM Streamers JOIN Games ON Streamers.GameId = Games.Id '
-                statement += 'WHERE Streamers.Username = "' + streamer_name + '"'
-
-                result = cur.execute(statement).fetchone()
-
-                if result is None:
-                    print("Streamer name not recongized. Try again.")
-
-                else:
-                    print('\n{} joined Twitch in {}, is under the game category of {}, and currently has {:,} followers.\n'.format(\
-                    streamer_name, result[6], result[0], result[1]))
-
-                    if result[7] != '':
-                        print('Featured snippet: ')
-                        print(result[7] + '\n')
-
-                    print('Here is his/her weekly performance:')
-                    print('Follower change: {:,}'.format(result[2]))
-                    print('Average viewers: {:,}'.format(result[3]))
-                    print('Peak viewers: {:,}'.format(result[4]))
-                    print('Hours live: {:,}'.format(result[5]))
-
-                conn.close()
-
-                command = input("Enter a command (or enter 'help' for options): ")
-
-            elif command.split()[0].lower() == 'plot':
+            if command.split()[0].lower() == 'plot':
                 plot_rankings(category, plot_dict)
                 command = input("Enter a command (or enter 'help' for options): ")
 
             elif command.split()[0].lower() == 'exit':
                 break
 
-            else:
-                print("Command not recognized. Please try again.")
-                command = input("Enter a command (or enter 'help' for options): ")
-
         except:
             print("Command not recognized. Please try again.")
             command = input("Enter a command (or enter 'help' for options): ")
             pass
 
-    if command_str[0] == 'game':
-        pass
+    elif command.split()[0].lower() == 'streamer':
+        streamer_name = command.split()[1]
 
-    if command_str[0] == 'plot':
-        pass
+        if len(command.split()) > 2:
+            for word in command.split()[2:]:
+                streamer_name += ' ' + word
+
+        display_streamer(streamer_name)
+        command = input("Enter a command (or enter 'help' for options): ")
+
+    elif command_str[0] == 'game':
+        game_name = command.split()[1]
+
+        if len(command.split()) > 2:
+            for word in command.split()[2:]:
+                game_name += ' ' + word
+
+        conn = sqlite.connect('twitch.db')
+        cur = conn.cursor()
+
+        statement = 'SELECT Streamers.Username '
+        statement += 'FROM Streamers JOIN Games ON Streamers.GameId = Games.Id '
+        statement += 'WHERE Games.Name = "' + game_name + '"'
+
+        result = cur.execute(statement).fetchall()
+
+        if result == []:
+            print("Game name not recongized. Try again.")
+            command = input("\nEnter a command (or enter 'help' for options): ")
+            pass
+
+        else:
+            print("\nHere are the streamers listed under the game category of " + game_name + ":")
+
+            counter = 1
+            for row in result:
+                print(str(counter) + ' ' + row[0])
+                counter += 1
+
+            conn.close()
+
+            command = input("\nEnter a command (or enter 'help' for options): ")
 
     else:
         print("Command not recognized. Please try again.")
