@@ -434,6 +434,7 @@ def display_rankings(category):
         print("{:<7} {:<20s} {:<20s} {:<10,}".format(final_lst[0], str(final_lst[1]), final_lst[2], final_lst[3]))
     conn.close()
 
+    # returned this in case the user wants to plot the displayed table
     return plot_dict
 
 #----------------FUNCTION TO DISPLAY STREAMER INFO-----------------
@@ -520,11 +521,10 @@ def plot_pie():
     conn = sqlite.connect('twitch.db')
     cur = conn.cursor()
 
-    statement = 'SELECT Games.Name '
-    statement += 'FROM Streamers JOIN Games ON Streamers.GameId = Games.Id '
-
+    statement = 'SELECT Games.Name FROM Streamers JOIN Games ON Streamers.GameId = Games.Id '
     result = cur.execute(statement)
 
+    # creates a dictionary with game name as key and number of streamers that play it as value
     games_dict = {}
     for row in result:
         if row[0] not in games_dict:
@@ -552,6 +552,7 @@ if __name__ == '__main__':
     while command.lower() != 'exit':
         command_str = command.lower().split()
 
+        # the help menu
         if command_str[0] == 'help':
             text = '''
             Here are a list of the possible commands and their functions:
@@ -576,16 +577,19 @@ if __name__ == '__main__':
             print(text)
             command = input("Enter a command (or enter 'help' for options): ")
 
+        # reset the databases
         elif command_str[0] == 'reset':
             reset_db()
             command = input("Enter a command (or enter 'help' for options): ")
 
+        # display the tables of rankings
         elif command_str[0] == 'rankings':
             try:
                 category = command_str[1]
                 plot_dict = display_rankings(category)
                 command = input("Enter a command (or enter 'help' for options): ")
 
+                # command to plot the information in the table
                 if command.split()[0].lower() == 'plot':
                     plot_rankings(category, plot_dict)
                     command = input("Enter a command (or enter 'help' for options): ")
@@ -593,11 +597,13 @@ if __name__ == '__main__':
                 elif command.split()[0].lower() == 'exit':
                     break
 
+            # if they don't use the correct category name
             except:
                 print("Command not recognized. Please try again.")
                 command = input("Enter a command (or enter 'help' for options): ")
                 pass
 
+        # get extra information on each streamer
         elif command.split()[0].lower() == 'streamer':
             streamer_name = command.split()[1]
 
@@ -608,6 +614,7 @@ if __name__ == '__main__':
             display_streamer(streamer_name)
             command = input("Enter a command (or enter 'help' for options): ")
 
+        # displays the usernames of people that play a specific game
         elif command_str[0] == 'game':
             game_name = command.split()[1]
 
@@ -641,6 +648,7 @@ if __name__ == '__main__':
 
                 command = input("\nEnter a command (or enter 'help' for options): ")
 
+        # plots a pie chart of the game distribution
         elif command_str[0] == 'distribution':
             plot_pie()
             command = input("\nEnter a command (or enter 'help' for options): ")

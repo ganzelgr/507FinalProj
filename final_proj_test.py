@@ -1,12 +1,3 @@
-#You must write unit tests to show that the data access, storage, and processing
-#components of your project are working correctly. You must create at least 3
-#test cases and use at least 15 assertions or calls to ‘fail( )’. Your tests should
-#show that you are able to access data from all of your sources, that your
-#database is correctly constructed and can satisfy queries that are necessary
-# for your program, and that your data processing produces the results and data
-#structures you need for presentation.
-
-
 import unittest
 from final_proj import *
 
@@ -17,12 +8,13 @@ class TestScraping(unittest.TestCase):
         base_url = 'https://www.twitchmetrics.net'
         total_streamers_lst = []
 
+        # make sure that the scraping is returning the top 50 streamers on the viewership page
         page_url = base_url + '/channels/viewership?lang=en'
         viewership_lst, total_streamers_lst = scrape_viewership_page(page_url, total_streamers_lst)
         self.assertEqual(len(viewership_lst), 50)
         self.assertEqual(len(total_streamers_lst), 50)
 
-
+        # make sure that the scraping is returning the top 50 streamers on another page (it uses a different function)
         total_streamers_lst = []
         page_url = base_url + '/channels/growth?lang=en'
         growth_lst, total_streamers_lst = scrape_twitch_metrics_page(page_url, total_streamers_lst)
