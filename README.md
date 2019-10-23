@@ -1,4 +1,4 @@
-# 507FinalProj
+# SI 507 Final Project
 
 #### Data sources used:
 
